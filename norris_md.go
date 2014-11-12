@@ -11,6 +11,8 @@ import (
 )
 
 type NorrisMd struct {
+	RootPath string
+	RootNode NodeInfo
 }
 
 type NodeInfo struct {
@@ -35,15 +37,15 @@ func (n NorrisMd) convert(path string, fileInfo os.FileInfo) NodeInfo {
 	}
 }
 
-func (n NorrisMd) initTree(rootPath string) (*NodeInfo, error) {
+func (n *NorrisMd) initTree() error {
 
 	// the map will contain NodeInfo objects for all visited nodes in the content tree
 	all := map[string]*NodeInfo{}
 
 	// walk all nodes in the content tree
-	err := filepath.Walk(rootPath, func(filePath string, fileInfo os.FileInfo, err error) error {
+	err := filepath.Walk(n.RootPath, func(filePath string, fileInfo os.FileInfo, err error) error {
 
-		rootPathAbs, err := filepath.Abs(rootPath)
+		rootPathAbs, err := filepath.Abs(n.RootPath)
 		filePathAbs, err := filepath.Abs(filePath)
 		filePathRel, err := filepath.Rel(rootPathAbs, filePathAbs)
 
@@ -55,10 +57,10 @@ func (n NorrisMd) initTree(rootPath string) (*NodeInfo, error) {
 	})
 
 	// build a tree structure out of the nodes in the map
-	root := all["."]
-	n.buildTree(root, &all)
+	n.RootNode = *all["."]
+	n.buildTree(&n.RootNode, &all)
 
-	return root, err
+	return err
 }
 
 func isChild(parentNode *NodeInfo, childNode *NodeInfo) bool {
@@ -122,19 +124,15 @@ func (n NorrisMd) run() {
 		fmt.Println(string(mdr.render(input)))
 	*/
 
-	contentDir := "/Users/danbim/Desktop/norris_content/"
-
-	if !n.dirExists(contentDir) {
-		fmt.Printf("no such file or directory: %s", contentDir)
+	if !n.dirExists(n.RootPath) {
+		fmt.Printf("no such file or directory: %s", n.RootPath)
 		os.Exit(1)
 		return
 	}
 
-	treeRoot, err := n.initTree(contentDir)
+	err := n.initTree()
 
-	//printTree(treeRoot, 0)
-
-	json, err := json.MarshalIndent(treeRoot, "", "  ")
+	json, err := json.MarshalIndent(n.RootNode, "", "  ")
 	if err != nil {
 		log.Println(err)
 		os.Exit(2)
@@ -143,7 +141,7 @@ func (n NorrisMd) run() {
 
 	log.Println(string(json))
 
-	fsw, err := newFSWatcher(contentDir)
+	fsw, err := newFSWatcher(n.RootPath)
 	if err != nil {
 		log.Println(err)
 		os.Exit(1)
@@ -155,13 +153,20 @@ func (n NorrisMd) run() {
 
 	for {
 		evt := <-fsw.events
-		log.Println(evt)
+		switch evt.EventType {
+		case CREATED:
+			log.Printf("created %v", evt.Path)
+		case DELETED:
+			log.Printf("deleted %v", evt.Path)
+		case UPDATED:
+			log.Printf("updated %v", evt.Path)
+		}
 	}
 }
 
 func main() {
 
-	norrisMd := NorrisMd{}
+	norrisMd := NorrisMd{RootPath: "/Users/danbim/Desktop/norris_content"}
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, os.Kill, syscall.SIGTERM)
