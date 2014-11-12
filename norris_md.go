@@ -61,7 +61,7 @@ func (n NorrisMd) initTree(rootPath string) (*NodeInfo, error) {
 	return root, err
 }
 
-func (n NorrisMd) isChild(parentNode *NodeInfo, childNode *NodeInfo) bool {
+func isChild(parentNode *NodeInfo, childNode *NodeInfo) bool {
 	if parentNode.NodeType == "file" {
 		log.Printf("isChild => parentnode %v is file")
 		return false
@@ -78,7 +78,7 @@ func (n NorrisMd) isChild(parentNode *NodeInfo, childNode *NodeInfo) bool {
 
 func (n NorrisMd) buildTree(root *NodeInfo, all *map[string]*NodeInfo) {
 	for _, child := range *all {
-		if n.isChild(root, child) {
+		if isChild(root, child) {
 			root.Children = append(root.Children, child)
 			if child.NodeType == "dir" {
 				n.buildTree(child, all)
@@ -149,7 +149,7 @@ func (n NorrisMd) run() {
 		os.Exit(1)
 	}
 
-	go fsw.run()
+	fsw.run()
 
 	log.Println("Up and ready")
 
