@@ -7,7 +7,11 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"syscall"
 )
+
+type NorrisMd struct {
+}
 
 type NodeInfo struct {
 	NodeType string
@@ -16,7 +20,7 @@ type NodeInfo struct {
 	Children []*NodeInfo
 }
 
-func convert(path string, fileInfo os.FileInfo) NodeInfo {
+func (n NorrisMd) convert(path string, fileInfo os.FileInfo) NodeInfo {
 	var nodeType string
 	if fileInfo.IsDir() {
 		nodeType = "dir"
@@ -31,7 +35,7 @@ func convert(path string, fileInfo os.FileInfo) NodeInfo {
 	}
 }
 
-func initTree(rootPath string) (*NodeInfo, error) {
+func (n NorrisMd) initTree(rootPath string) (*NodeInfo, error) {
 
 	// the map will contain NodeInfo objects for all visited nodes in the content tree
 	all := map[string]*NodeInfo{}
@@ -43,7 +47,7 @@ func initTree(rootPath string) (*NodeInfo, error) {
 		filePathAbs, err := filepath.Abs(filePath)
 		filePathRel, err := filepath.Rel(rootPathAbs, filePathAbs)
 
-		nodeInfo := convert(filePathRel, fileInfo)
+		nodeInfo := n.convert(filePathRel, fileInfo)
 
 		all[filePathRel] = &nodeInfo
 
@@ -52,12 +56,12 @@ func initTree(rootPath string) (*NodeInfo, error) {
 
 	// build a tree structure out of the nodes in the map
 	root := all["."]
-	buildTree(root, &all)
+	n.buildTree(root, &all)
 
 	return root, err
 }
 
-func isChild(parentNode *NodeInfo, childNode *NodeInfo) bool {
+func (n NorrisMd) isChild(parentNode *NodeInfo, childNode *NodeInfo) bool {
 	if parentNode.NodeType == "file" {
 		log.Printf("isChild => parentnode %v is file")
 		return false
@@ -72,18 +76,18 @@ func isChild(parentNode *NodeInfo, childNode *NodeInfo) bool {
 	return parentPath == childParentPath
 }
 
-func buildTree(root *NodeInfo, all *map[string]*NodeInfo) {
+func (n NorrisMd) buildTree(root *NodeInfo, all *map[string]*NodeInfo) {
 	for _, child := range *all {
-		if isChild(root, child) {
+		if n.isChild(root, child) {
 			root.Children = append(root.Children, child)
 			if child.NodeType == "dir" {
-				buildTree(child, all)
+				n.buildTree(child, all)
 			}
 		}
 	}
 }
 
-func printTree(root *NodeInfo, indent int) {
+func (n NorrisMd) printTree(root *NodeInfo, indent int) {
 	var indentStr string
 	for i := 0; i < indent; i++ {
 		indentStr += " "
@@ -93,23 +97,24 @@ func printTree(root *NodeInfo, indent int) {
 	} else {
 		log.Printf("%v{nodeType=%v,title=%v,path=%v,children=[", indentStr, root.NodeType, root.Title, root.Path)
 		for _, child := range root.Children {
-			printTree(child, indent+2)
+			n.printTree(child, indent+2)
 		}
 		log.Printf("%v]}", indentStr)
 	}
 }
 
-func dirExists(dir string) bool {
+func (n NorrisMd) dirExists(dir string) bool {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return false
 	}
 	return true
 }
 
-func main() {
+func (n NorrisMd) shutdown(sig os.Signal) {
+	log.Println("Shutting down norris_md")
+}
 
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt, os.Kill)
+func (n NorrisMd) run() {
 
 	/*
 		input := []byte("#Hello, World")
@@ -119,13 +124,13 @@ func main() {
 
 	contentDir := "/Users/danbim/Desktop/norris_content/"
 
-	if !dirExists(contentDir) {
+	if !n.dirExists(contentDir) {
 		fmt.Printf("no such file or directory: %s", contentDir)
 		os.Exit(1)
 		return
 	}
 
-	treeRoot, err := initTree(contentDir)
+	treeRoot, err := n.initTree(contentDir)
 
 	//printTree(treeRoot, 0)
 
@@ -143,15 +148,30 @@ func main() {
 		log.Println(err)
 		os.Exit(1)
 	}
+
+	go fsw.run()
+
+	log.Println("Up and ready")
+
 	for {
-		log.Println("waiting for events")
-		select {
-		case sig := <-signals:
-			log.Println("caught signal")
-			fsw.signals <- sig
-			os.Exit(1)
-		case evt := <-fsw.events:
-			log.Println(evt)
-		}
+		evt := <-fsw.events
+		log.Println(evt)
 	}
+}
+
+func main() {
+
+	norrisMd := NorrisMd{}
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, os.Kill, syscall.SIGTERM)
+	go func() {
+		for sig := range signals {
+			norrisMd.shutdown(sig)
+			os.Exit(1)
+		}
+	}()
+
+	norrisMd.run()
+
 }

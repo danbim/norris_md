@@ -37,6 +37,12 @@ func (fsw *FSWatcher) run() {
 		path, _ := filepath.Rel(fsw.dir, pathAbs)
 		if fileEvent.IsCreate() {
 			fsw.events <- FSEvent{EventType: CREATED, Path: path}
+		} else if fileEvent.IsDelete() {
+			fsw.events <- FSEvent{EventType: DELETED, Path: path}
+		} else if fileEvent.IsModify() {
+			fsw.events <- FSEvent{EventType: UPDATED, Path: path}
+		} else if fileEvent.IsRename() {
+			log.Println(fileEvent)
 		}
 	}
 }
@@ -44,6 +50,5 @@ func (fsw *FSWatcher) run() {
 func newFSWatcher(dir string) (fsw FSWatcher, err error) {
 	w, err := fsnotify.NewWatcher()
 	fsw = FSWatcher{dir: dir, watcher: *w, events: make(chan FSEvent, 10), signals: make(chan os.Signal, 1)}
-	go fsw.run()
 	return
 }
