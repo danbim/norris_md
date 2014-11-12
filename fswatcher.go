@@ -90,9 +90,16 @@ func (fsw FSWatcher) watchRecursive(dir string) error {
 				fsw.watcher.RemoveWatch(path)
 
 			} else if fileEvent.IsModify() {
+
 				fsw.events <- FSEvent{EventType: UPDATED, Path: path}
+
 			} else if fileEvent.IsRename() {
-				log.Println(fileEvent)
+
+				// only occurs on rename and then CREATED has been issued before
+				// so we'll have to create a DELETED event to not get incosistent
+				fsw.events <- FSEvent{EventType: DELETED, Path: path}
+				fsw.watcher.RemoveWatch(path)
+
 			}
 		}
 	}()
