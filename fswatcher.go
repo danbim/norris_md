@@ -23,7 +23,6 @@ type FSWatcher struct {
 	dir     string
 	events  chan FSEvent
 	watcher *fsnotify.Watcher
-	watches []string
 	signals chan os.Signal
 }
 
@@ -59,7 +58,6 @@ func (fsw FSWatcher) watchRecursive(dir string) error {
 		log.Println(err)
 		os.Exit(4)
 	}
-	fsw.watches = append(fsw.watches, dir)
 
 	go func() {
 		for {
@@ -118,6 +116,10 @@ func (fsw FSWatcher) run() {
 	fsw.watchRecursive(fsw.dir)
 }
 
+func (fsw FSWatcher) shutdown() error {
+	return fsw.watcher.Close()
+}
+
 func newFSWatcher(dir string) (fsw FSWatcher, err error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -127,7 +129,6 @@ func newFSWatcher(dir string) (fsw FSWatcher, err error) {
 	fsw = FSWatcher{
 		dir:     dir,
 		watcher: watcher,
-		watches: make([]string, 0, 0),
 		events:  make(chan FSEvent, 1),
 		signals: make(chan os.Signal, 1),
 	}

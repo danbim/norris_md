@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -10,9 +11,22 @@ import (
 	"syscall"
 )
 
+const (
+	EXIT_INTERRUPTED               = iota
+	EXIT_KILLED                    = iota
+	EXIT_STARTUP_FSWATCHER_FAILED  = iota
+	EXIT_SHUTDOWN_FSWATCHER_FAILED = iota
+	EXIT_SHUTDOWN_HTTP_FAILED      = iota
+)
+
 type NorrisMd struct {
 	RootPath string
-	RootNode NodeInfo
+}
+
+type NorrisUpdate struct {
+	Type     string
+	Path     string
+	NodeInfo NodeInfo
 }
 
 type NodeInfo struct {
@@ -37,7 +51,7 @@ func (n NorrisMd) convert(path string, fileInfo os.FileInfo) NodeInfo {
 	}
 }
 
-func (n *NorrisMd) initTree() error {
+func (n *NorrisMd) readTree() (NodeInfo, error) {
 
 	// the map will contain NodeInfo objects for all visited nodes in the content tree
 	all := map[string]*NodeInfo{}
@@ -57,10 +71,10 @@ func (n *NorrisMd) initTree() error {
 	})
 
 	// build a tree structure out of the nodes in the map
-	n.RootNode = *all["."]
-	n.buildTree(&n.RootNode, &all)
+	rootNode := *all["."]
+	n.buildTree(&rootNode, &all)
 
-	return err
+	return rootNode, err
 }
 
 func isChild(parentNode *NodeInfo, childNode *NodeInfo) bool {
@@ -118,50 +132,90 @@ func (n NorrisMd) shutdown(sig os.Signal) {
 
 func (n NorrisMd) run() {
 
-	/*
-		input := []byte("#Hello, World")
-		mdr := MarkdownRenderer{}
-		fmt.Println(string(mdr.render(input)))
-	*/
-
 	if !n.dirExists(n.RootPath) {
-		fmt.Printf("no such file or directory: %s", n.RootPath)
+		fmt.Printf("Site root path does not exist: %s", n.RootPath)
 		os.Exit(1)
 		return
 	}
 
-	err := n.initTree()
+	rootNode, err := n.readTree()
 
-	json, err := json.MarshalIndent(n.RootNode, "", "  ")
+	jsonContent, err := json.MarshalIndent(rootNode, "", "  ")
 	if err != nil {
 		log.Println(err)
 		os.Exit(2)
 		return
 	}
 
-	log.Println(string(json))
+	log.Println(string(jsonContent))
 
-	fsw, err := newFSWatcher(n.RootPath)
+	fsWatcher, err := newFSWatcher(n.RootPath)
 	if err != nil {
 		log.Println(err)
-		os.Exit(1)
+		os.Exit(EXIT_STARTUP_FSWATCHER_FAILED)
 	}
 
-	fsw.run()
+	fsWatcher.run()
+	defer func() {
+		err := fsWatcher.shutdown()
+		if err != nil {
+			log.Println("error shutting down NorrisMd file system watcher: %v", err)
+			os.Exit(EXIT_SHUTDOWN_FSWATCHER_FAILED)
+		}
+	}()
 
-	log.Println("Up and ready")
+	ns := newNorrisServer(3456, "localhost")
+	go ns.run()
+	defer func() {
+		err := ns.shutdown()
+		if err != nil {
+			log.Println("error shutting down NorrisMd web server: %v", err)
+			os.Exit(EXIT_SHUTDOWN_HTTP_FAILED)
+		}
+	}()
+
+	log.Printf("Up and running at %v:%v", ns.Host, ns.Port)
 
 	for {
-		evt := <-fsw.events
-		switch evt.EventType {
-		case CREATED:
-			log.Printf("created %v", evt.Path)
-		case DELETED:
+		evt := <-fsWatcher.events
+		switch {
+		case evt.EventType == DELETED:
 			log.Printf("deleted %v", evt.Path)
-		case UPDATED:
-			log.Printf("updated %v", evt.Path)
+			ns.sendUpdate(&NorrisUpdate{
+				Type: "DELETED",
+				Path: evt.Path,
+			})
+		case evt.EventType == UPDATED || evt.EventType == CREATED:
+			var Type string
+			if evt.EventType == UPDATED {
+				Type = "CREATED"
+			} else {
+				Type = "UPDATED"
+			}
+			log.Printf("%v %v", Type, evt.Path)
+			fileInfo, err := os.Stat(filepath.Join(n.RootPath, evt.Path))
+			if err != nil {
+				log.Printf("error while reading file info for file %v", err)
+			} else {
+				ns.sendUpdate(&NorrisUpdate{
+					Type:     Type,
+					Path:     evt.Path,
+					NodeInfo: n.convert(evt.Path, fileInfo),
+				})
+			}
 		}
 	}
+}
+
+var renderer *MarkdownRenderer = &MarkdownRenderer{}
+
+func (n NorrisMd) render(path string) (html []byte, err error) {
+	file, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Println("error reading file %v: %v", path, err)
+		return nil, err
+	}
+	return renderer.render(file), nil
 }
 
 func main() {
@@ -173,7 +227,12 @@ func main() {
 	go func() {
 		for sig := range signals {
 			norrisMd.shutdown(sig)
-			os.Exit(1)
+			switch {
+			case sig == os.Interrupt:
+				os.Exit(EXIT_INTERRUPTED)
+			case sig == os.Kill || sig == syscall.SIGTERM:
+				os.Exit(EXIT_KILLED)
+			}
 		}
 	}()
 
