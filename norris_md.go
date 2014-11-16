@@ -20,7 +20,8 @@ const (
 )
 
 type NorrisMd struct {
-	RootPath string
+	RootPath   string
+	StaticPath string
 }
 
 type NorrisUpdate struct {
@@ -119,7 +120,14 @@ func (n NorrisMd) printTree(root *NodeInfo, indent int) {
 	}
 }
 
-func (n NorrisMd) dirExists(dir string) bool {
+func fileExists(path string) bool {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
+func dirExists(dir string) bool {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return false
 	}
@@ -132,7 +140,7 @@ func (n NorrisMd) shutdown(sig os.Signal) {
 
 func (n NorrisMd) run() {
 
-	if !n.dirExists(n.RootPath) {
+	if !dirExists(n.RootPath) {
 		fmt.Printf("Site root path does not exist: %s", n.RootPath)
 		os.Exit(1)
 		return
@@ -210,7 +218,9 @@ func (n NorrisMd) run() {
 var renderer *MarkdownRenderer = &MarkdownRenderer{}
 
 func (n NorrisMd) render(path string) (html []byte, err error) {
-	file, err := ioutil.ReadFile(path)
+	absPath := filepath.Join(n.RootPath, path)
+	log.Printf("Rendering %v", absPath)
+	file, err := ioutil.ReadFile(absPath)
 	if err != nil {
 		log.Println("error reading file %v: %v", path, err)
 		return nil, err
@@ -220,7 +230,10 @@ func (n NorrisMd) render(path string) (html []byte, err error) {
 
 func main() {
 
-	norrisMd := NorrisMd{RootPath: "/Users/danbim/Desktop/norris_content"}
+	norrisMd := NorrisMd{
+		RootPath:   "/Users/danbim/Desktop/norris_content",
+		StaticPath: "./static",
+	}
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, os.Kill, syscall.SIGTERM)

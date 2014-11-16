@@ -1,14 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/gorilla/websocket"
-	//"html"
-	"encoding/json"
 	"io/ioutil"
 	"log"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"time"
 )
 
@@ -66,54 +67,98 @@ func (c *Connection) writePump() {
 	}
 }
 
-func (ns NorrisServer) serveHome(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/norris_md/tree" {
-		tree, err := ns.norrisMd.readTree()
-		if err != nil {
-			msg := fmt.Sprintf("Error reading NorrisMd document tree: %v", err)
-			log.Printf(msg)
-			http.Error(w, msg, 500)
-			return
-		}
-		json, err := json.MarshalIndent(tree, "", "  ")
-		if err != nil {
-			msg := fmt.Sprintf("Error serializing NorrisMd document tree: %v", err)
-			log.Printf(msg)
-			http.Error(w, msg, 500)
-			return
-		}
-		w.Header().Add("Content-Type", "application/json")
-		w.Write(json)
-		return
-	}
-	if r.URL.Path != "/" {
-		http.Error(w, "Not found", 404)
-		return
-	}
+func (ns NorrisServer) serveMeta(w http.ResponseWriter, r *http.Request) {
+
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", 405)
 		return
 	}
-	file, err := ioutil.ReadFile("template.html")
+
+	tree, err := ns.norrisMd.readTree()
+
 	if err != nil {
-		log.Println("error reading template file")
-		http.Error(w, "Error reading template file", 500)
+		msg := fmt.Sprintf("Error reading NorrisMd document tree: %v", err)
+		log.Printf(msg)
+		http.Error(w, msg, 500)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	json, err := json.MarshalIndent(tree, "", "  ")
+	if err != nil {
+		msg := fmt.Sprintf("Error serializing NorrisMd document tree: %v", err)
+		log.Printf(msg)
+		http.Error(w, msg, 500)
+		return
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+	w.Write(json)
+
+	return
+}
+
+func (ns NorrisServer) serveStatic(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+
+	if r.URL.Path == "/" {
+		r.URL.Path = "index.html"
+	}
+
+	requestedAbsPath, _ := filepath.Abs(filepath.Join(ns.norrisMd.StaticPath, r.URL.Path))
+	if !fileExists(requestedAbsPath) {
+		http.Error(w, fmt.Sprintf("Requested file %v does not exist!", requestedAbsPath), 404)
+		return
+	}
+
+	file, err := ioutil.ReadFile(requestedAbsPath)
+	if err != nil {
+		msg := fmt.Sprintf("Error reading template file (%v): %v", requestedAbsPath, err)
+		log.Println(msg)
+		http.Error(w, msg, 500)
+		return
+	}
+
+	contentType := mime.TypeByExtension(filepath.Ext(requestedAbsPath))
+	if "" != contentType {
+		w.Header().Set("Content-Type", contentType+"; charset=utf-8")
+	}
 	w.Write(file)
 }
 
+func (ns NorrisServer) serveContent(w http.ResponseWriter, r *http.Request) {
+
+	contentPath := r.URL.Path[len(PATH_CONTENT):len(r.URL.Path)]
+	log.Printf("Serving markdown content: %v", contentPath)
+
+	content, err := ns.norrisMd.render(contentPath)
+	if err != nil {
+		msg := fmt.Sprintf("Error rendering markdown content for %v: %v", contentPath, err)
+		log.Println(msg)
+		http.Error(w, msg, 500)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(content)
+}
+
 func (ns NorrisServer) serveWs(w http.ResponseWriter, r *http.Request) {
+
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", 405)
 		return
 	}
+
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
+
 	c := &Connection{send: make(chan []byte, 256), ws: ws}
 	ns.connections = append(ns.connections, c)
 	go c.writePump()
@@ -129,14 +174,25 @@ func (ns NorrisServer) sendUpdate(nu *NorrisUpdate) {
 	}
 }
 
+const (
+	PATH_CONTENT = "/norris_md/content/"
+	PATH_TREE    = "/norris_md/tree.json"
+	PATH_WS      = "/norris_md/ws"
+)
+
 func (ns NorrisServer) run() error {
-	http.HandleFunc("/", ns.serveHome)
-	http.HandleFunc("/ws", ns.serveWs)
+
+	http.HandleFunc("/norris_md/content/", ns.serveContent)
+	http.HandleFunc("/norris_md/tree.json", ns.serveMeta)
+	http.HandleFunc("/norris_md/ws", ns.serveWs)
+	http.HandleFunc("/", ns.serveStatic)
+
 	err := http.ListenAndServe(*port, nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 		return err
 	}
+
 	return nil
 }
 

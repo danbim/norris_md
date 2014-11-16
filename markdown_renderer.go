@@ -9,6 +9,6 @@ type MarkdownRenderer struct {
 }
 
 func (m MarkdownRenderer) render(input []byte) []byte {
-	unsafe := blackfriday.MarkdownCommon([]byte("# Hello World"))
+	unsafe := blackfriday.MarkdownCommon(input)
 	return bluemonday.UGCPolicy().SanitizeBytes(unsafe)
 }
