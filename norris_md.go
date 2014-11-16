@@ -164,7 +164,7 @@ func (n NorrisMd) run() {
 		}
 	}()
 
-	ns := newNorrisServer(3456, "localhost")
+	ns := newNorrisServer(3456, "localhost", &n)
 	go ns.run()
 	defer func() {
 		err := ns.shutdown()
