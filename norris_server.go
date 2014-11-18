@@ -42,7 +42,7 @@ func (c *Connection) write(mt int, payload []byte) error {
 }
 
 func (c *Connection) writePump() {
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(30 * time.Second)
 	defer func() {
 		ticker.Stop()
 		c.ws.Close()
@@ -58,12 +58,25 @@ func (c *Connection) writePump() {
 				return
 			}
 		case <-ticker.C:
-			log.Println("ping")
 			if err := c.write(websocket.PingMessage, []byte{}); err != nil {
 				log.Println("error writing ping: %v", err)
 				return
 			}
 		}
+	}
+}
+
+func (ns *NorrisServer) removeConn(c *Connection) {
+	found := -1
+	for idx, conn := range ns.connections {
+		if conn == c {
+			found = idx
+			break
+		}
+	}
+	if found > -1 {
+		ns.connections = append(ns.connections[:found], ns.connections[found+1:]...)
+		log.Printf("removed connection. now %v active websocket connections.", len(ns.connections))
 	}
 }
 
@@ -146,7 +159,7 @@ func (ns NorrisServer) serveContent(w http.ResponseWriter, r *http.Request) {
 	w.Write(content)
 }
 
-func (ns NorrisServer) serveWs(w http.ResponseWriter, r *http.Request) {
+func (ns *NorrisServer) serveWs(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", 405)
@@ -161,6 +174,7 @@ func (ns NorrisServer) serveWs(w http.ResponseWriter, r *http.Request) {
 
 	c := &Connection{send: make(chan []byte, 256), ws: ws}
 	ns.connections = append(ns.connections, c)
+	log.Printf("now %v active websocket connections", len(ns.connections))
 	go c.writePump()
 	log.Println("Accepted WebSocket connection")
 }
@@ -171,6 +185,11 @@ func (ns NorrisServer) sendUpdate(nu *NorrisUpdate) {
 		log.Printf("error while serializing JSON for update event %v: %v", nu, err)
 	} else {
 		log.Println("FAKE sending to connected WebSocket clients: %v", string(jsonContent))
+		log.Printf("there are currently %v open connections", len(ns.connections))
+		for _, conn := range ns.connections {
+			log.Printf("sending update to %v", conn)
+			conn.ws.WriteJSON(nu)
+		}
 	}
 }
 

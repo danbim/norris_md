@@ -114,6 +114,11 @@ function buildNavigation() {
 }
 
 function listenForUpdates() {
+	console.log(document.location);
+	var socket = new WebSocket("ws://" + document.location.host + "/norris_md/ws");
+	socket.onmessage = function (event) {
+		console.log(event.data);
+	}
 	// TODO connect to NorrisMd websocket server to listen for updates
 }
 
