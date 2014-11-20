@@ -80,7 +80,7 @@ func (ns *NorrisServer) removeConn(c *Connection) {
 	}
 }
 
-func (ns NorrisServer) serveMeta(w http.ResponseWriter, r *http.Request) {
+func (ns *NorrisServer) serveMeta(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", 405)
@@ -110,7 +110,7 @@ func (ns NorrisServer) serveMeta(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func (ns NorrisServer) serveStatic(w http.ResponseWriter, r *http.Request) {
+func (ns *NorrisServer) serveStatic(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", 405)
@@ -142,7 +142,7 @@ func (ns NorrisServer) serveStatic(w http.ResponseWriter, r *http.Request) {
 	w.Write(file)
 }
 
-func (ns NorrisServer) serveContent(w http.ResponseWriter, r *http.Request) {
+func (ns *NorrisServer) serveContent(w http.ResponseWriter, r *http.Request) {
 
 	contentPath := r.URL.Path[len(PATH_CONTENT):len(r.URL.Path)]
 	log.Printf("Serving markdown content: %v", contentPath)
@@ -179,16 +179,22 @@ func (ns *NorrisServer) serveWs(w http.ResponseWriter, r *http.Request) {
 	log.Println("Accepted WebSocket connection")
 }
 
-func (ns NorrisServer) sendUpdate(nu *NorrisUpdate) {
+func (ns *NorrisServer) sendUpdate(nu *NorrisUpdate) {
 	jsonContent, err := json.MarshalIndent(nu, "", "  ")
 	if err != nil {
-		log.Printf("error while serializing JSON for update event %v: %v", nu, err)
+		log.Printf("Error while serializing JSON for update event %v: %v", nu, err)
 	} else {
-		log.Println("FAKE sending to connected WebSocket clients: %v", string(jsonContent))
-		log.Printf("there are currently %v open connections", len(ns.connections))
+		log.Printf("Sending update to %v currently connected WebSocket clients: %v", len(ns.connections), string(jsonContent))
 		for _, conn := range ns.connections {
-			log.Printf("sending update to %v", conn)
-			conn.ws.WriteJSON(nu)
+			log.Printf("Sending update to %v", conn)
+
+			json, err := json.MarshalIndent(nu, "", "  ")
+			if err != nil {
+				msg := fmt.Sprintf("Error serializing NorrisMd document tree: %v", err)
+				log.Printf(msg)
+				return
+			}
+			conn.send <- json
 		}
 	}
 }
@@ -199,7 +205,7 @@ const (
 	PATH_WS      = "/norris_md/ws"
 )
 
-func (ns NorrisServer) run() error {
+func (ns *NorrisServer) run() error {
 
 	http.HandleFunc("/norris_md/content/", ns.serveContent)
 	http.HandleFunc("/norris_md/tree.json", ns.serveMeta)
@@ -215,7 +221,7 @@ func (ns NorrisServer) run() error {
 	return nil
 }
 
-func (ns NorrisServer) shutdown() error {
+func (ns *NorrisServer) shutdown() error {
 	// nothing to do
 	return nil
 }

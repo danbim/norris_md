@@ -196,9 +196,9 @@ func (n NorrisMd) run() {
 		case evt.EventType == UPDATED || evt.EventType == CREATED:
 			var Type string
 			if evt.EventType == UPDATED {
-				Type = "CREATED"
-			} else {
 				Type = "UPDATED"
+			} else {
+				Type = "CREATED"
 			}
 			log.Printf("%v %v", Type, evt.Path)
 			fileInfo, err := os.Stat(filepath.Join(n.RootPath, evt.Path))
@@ -250,5 +250,4 @@ func main() {
 	}()
 
 	norrisMd.run()
-
 }

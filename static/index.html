@@ -81,7 +81,6 @@ class="caret"></span></a>
 
 function addMenuItem(item, parent) {
 	var parentElem, template;
-	console.log("addMenuItem", item, parent);
 	if (parent) {
 		parentElem = $('#norris_md-nav .navbar-nav a[href="#' + parent.Path + '"]').siblings('ul.dropdown-menu');
 	} else {
@@ -100,7 +99,6 @@ function addMenuItem(item, parent) {
 
 function buildNavigation() {
 	var onSuccess = function(root, textStatus, jqXHR) {
-		console.log(root);
 		root.Children.forEach(function(child) { addMenuItem(child, undefined) });
 	}
 	var onError = function(jqXHR, textStatus, errorThrown) {
@@ -114,7 +112,6 @@ function buildNavigation() {
 }
 
 function listenForUpdates() {
-	console.log(document.location);
 	var socket = new WebSocket("ws://" + document.location.host + "/norris_md/ws");
 	socket.onmessage = function (event) {
 		console.log(event.data);
