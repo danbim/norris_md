@@ -33,6 +33,7 @@ go build
  * [ ] Ignore hidden files (e.g., vim swap files)
  * [ ] Allow sorting (sub)pages in the menu bar
  * [ ] Document how to configure NorrisMd and the site (using meta data files)
+ * [ ] Include static content into the binary built by the Go compiler (using e.g. go-bindata)
 
 ### Site generator
 
