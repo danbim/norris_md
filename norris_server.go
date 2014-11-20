@@ -41,11 +41,13 @@ func (c *Connection) write(mt int, payload []byte) error {
 	return c.ws.WriteMessage(mt, payload)
 }
 
-func (c *Connection) writePump() {
+func (ns *NorrisServer) writePump(c *Connection) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer func() {
+		log.Printf("Stopping writePump for WS connection %v", c)
 		ticker.Stop()
 		c.ws.Close()
+		ns.removeConn(c)
 	}()
 	for {
 		select {
@@ -59,7 +61,7 @@ func (c *Connection) writePump() {
 			}
 		case <-ticker.C:
 			if err := c.write(websocket.PingMessage, []byte{}); err != nil {
-				log.Println("error writing ping: %v", err)
+				log.Println("Error writing ping: %v", err)
 				return
 			}
 		}
@@ -76,7 +78,7 @@ func (ns *NorrisServer) removeConn(c *Connection) {
 	}
 	if found > -1 {
 		ns.connections = append(ns.connections[:found], ns.connections[found+1:]...)
-		log.Printf("removed connection. now %v active websocket connections.", len(ns.connections))
+		log.Printf("Removed connection. Now %v active websocket connections.", len(ns.connections))
 	}
 }
 
@@ -175,7 +177,7 @@ func (ns *NorrisServer) serveWs(w http.ResponseWriter, r *http.Request) {
 	c := &Connection{send: make(chan []byte, 256), ws: ws}
 	ns.connections = append(ns.connections, c)
 	log.Printf("now %v active websocket connections", len(ns.connections))
-	go c.writePump()
+	go ns.writePump(c)
 	log.Println("Accepted WebSocket connection")
 }
 

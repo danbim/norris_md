@@ -44,7 +44,7 @@
                     <span class="icon-bar"></span>
                     <span class="icon-bar"></span>
                 </button>
-								<a class="navbar-brand" href="#" onclick="navigate('/')"><span class="glyphicon glyphicon-home"/></a>
+				<a class="navbar-brand" href="#" onclick="navigate('/')"><span class="glyphicon glyphicon-home"/></a>
             </div>
             <div class="collapse navbar-collapse">
                 <ul class="nav navbar-nav"></ul>
@@ -111,9 +111,48 @@ function buildNavigation() {
 	});
 }
 
+function onMenuItemCreated(evt) {
+	var splitPath = evt.Path.split("/");
+	if (splitPath.length > 2) {
+		window.alert('Received an update for a newly created content document. Unfortunately the path ' + evt.Path + ' contains more than one level of folder hierarchy which is currently not supported by NorrisMd');
+		return;
+	}
+	if (splitPath.length == 1) {
+		addMenuItem(evt.NodeInfo, undefined);
+	} else {
+		addMenuItem(evt.NodeInfo, {Path:splitPath[0]});
+	}
+}
+
+function onMenuItemUpdated(evt) {
+
+}
+
+function onMenuItemDeleted(evt) {
+	var splitPath = evt.Path.split("/");
+	if (splitPath.length > 2) {
+		window.alert('Received an update for a newly created content document. Unfortunately the path ' + evt.Path + ' contains more than one level of folder hierarchy which is currently not supported by NorrisMd');
+		return;
+	}
+	var li = $('#norris_md-nav a[href="#' + evt.Path + '"]').parent('li');
+	li.remove();
+}
+
 function listenForUpdates() {
 	var socket = new WebSocket("ws://" + document.location.host + "/norris_md/ws");
 	socket.onmessage = function (event) {
+		var evt = JSON.parse(event.data);
+		switch (evt.Type) {
+			case 'CREATED':
+				onMenuItemCreated(evt);
+				break;
+			case 'UPDATED':
+				onMenuItemUpdated(evt);
+				break;
+			case 'DELETED':
+				onMenuItemDeleted(evt);
+				break;
+		}
 		console.log(event.data);
 	}
 	// TODO connect to NorrisMd websocket server to listen for updates

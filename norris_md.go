@@ -218,11 +218,14 @@ func (n NorrisMd) run() {
 var renderer *MarkdownRenderer = &MarkdownRenderer{}
 
 func (n NorrisMd) render(path string) (html []byte, err error) {
+	if "" == path {
+		path = "Home.md"
+	}
 	absPath := filepath.Join(n.RootPath, path)
 	log.Printf("Rendering %v", absPath)
 	file, err := ioutil.ReadFile(absPath)
 	if err != nil {
-		log.Println("error reading file %v: %v", path, err)
+		log.Println("Error reading file %v: %v", path, err)
 		return nil, err
 	}
 	return renderer.render(file), nil
