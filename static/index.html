@@ -127,7 +127,7 @@ function onUpdated(evt) {
 
 	// re-render page if we're currently displaying the udpated site
 	if (window.location.hash.substr(1) == evt.Path) {
-
+		loadPage(evt.Path);
 	}
 	console.log(event.data);
 }
@@ -184,8 +184,6 @@ function navigate(path) {
 }
 
 function loadPage(path) {
-	$("#norris_md-content").empty();
-	$("#norris_md-content").append($('<img src="img/ajax-loader.gif"/>'));
 	$.ajax("/norris_md/content/" + path, {
 		success: function(html) {
 			$("#norris_md-content").empty();
