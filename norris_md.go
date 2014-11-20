@@ -1,7 +1,8 @@
 package main
 
 import (
-	"encoding/json"
+	//"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -12,16 +13,19 @@ import (
 )
 
 const (
-	EXIT_INTERRUPTED               = iota
-	EXIT_KILLED                    = iota
-	EXIT_STARTUP_FSWATCHER_FAILED  = iota
-	EXIT_SHUTDOWN_FSWATCHER_FAILED = iota
-	EXIT_SHUTDOWN_HTTP_FAILED      = iota
+	EXIT_INTERRUPTED               = 1
+	EXIT_KILLED                    = 2
+	EXIT_STARTUP_FSWATCHER_FAILED  = 101
+	EXIT_SHUTDOWN_FSWATCHER_FAILED = 201
+	EXIT_SHUTDOWN_HTTP_FAILED      = 202
+	VERSION                        = "0.0.1"
 )
 
 type NorrisMd struct {
 	RootPath   string
 	StaticPath string
+	Port       int
+	Hostname   string
 }
 
 type NorrisUpdate struct {
@@ -132,7 +136,12 @@ func fileExists(path string) bool {
 }
 
 func dirExists(dir string) bool {
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
+	dirAbs, err := filepath.Abs(dir)
+	if err != nil {
+		log.Printf("Error retrieving absolute path of %v", dir)
+		return false
+	}
+	if _, err := os.Stat(dirAbs); os.IsNotExist(err) {
 		return false
 	}
 	return true
@@ -149,18 +158,18 @@ func (n NorrisMd) run() {
 		os.Exit(1)
 		return
 	}
+	/*
+		rootNode, err := n.readTree()
 
-	rootNode, err := n.readTree()
+		jsonContent, err := json.MarshalIndent(rootNode, "", "  ")
+		if err != nil {
+			log.Println(err)
+			os.Exit(2)
+			return
+		}
 
-	jsonContent, err := json.MarshalIndent(rootNode, "", "  ")
-	if err != nil {
-		log.Println(err)
-		os.Exit(2)
-		return
-	}
-
-	log.Println(string(jsonContent))
-
+		log.Println(string(jsonContent))
+	*/
 	fsWatcher, err := newFSWatcher(n.RootPath)
 	if err != nil {
 		log.Println(err)
@@ -176,7 +185,7 @@ func (n NorrisMd) run() {
 		}
 	}()
 
-	ns := newNorrisServer(3456, "localhost", &n)
+	ns := newNorrisServer(n.Port, n.Hostname, &n)
 	go ns.run()
 	defer func() {
 		err := ns.shutdown()
@@ -186,7 +195,7 @@ func (n NorrisMd) run() {
 		}
 	}()
 
-	log.Printf("Up and running at %v:%v", ns.Host, ns.Port)
+	log.Printf("NorrisMd up and running at %v:%v", ns.Host, ns.Port)
 
 	for {
 		evt := <-fsWatcher.events
@@ -237,9 +246,24 @@ func (n NorrisMd) render(path string) (html []byte, err error) {
 
 func main() {
 
+	staticPath := flag.String("static", "./static", "Directory to serve static assets from [default: ./static]")
+	port := flag.Int("port", 3456, "HTTP port to listen on")
+	hostname := flag.String("hostname", "0.0.0.0", "Hostname to bind to (0.0.0.0 binds to all interfaces)")
+	flag.Parse()
+
+	if flag.NArg() == 0 {
+		fmt.Fprintf(os.Stderr, "Usage: %s DOC_ROOT \n", os.Args[0])
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	rootPath := flag.Arg(0)
+
 	norrisMd := NorrisMd{
-		RootPath:   "/Users/danbim/Desktop/norris_content",
-		StaticPath: "./static",
+		RootPath:   rootPath,
+		StaticPath: *staticPath,
+		Port:       *port,
+		Hostname:   *hostname,
 	}
 
 	signals := make(chan os.Signal, 1)

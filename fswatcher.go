@@ -51,7 +51,7 @@ func (fsw FSWatcher) isDir(path string) bool {
 
 func (fsw FSWatcher) watchRecursive(dir string) error {
 
-	log.Printf("watching %v", dir)
+	//log.Printf("watching %v", dir)
 
 	err := fsw.watcher.Watch(dir)
 	if err != nil {

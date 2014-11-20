@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"io/ioutil"
@@ -25,11 +24,9 @@ type Connection struct {
 	send chan []byte
 }
 
-func newNorrisServer(port int, host string, norrisMd *NorrisMd) *NorrisServer {
-	return &NorrisServer{Port: port, Host: host, connections: make([]*Connection, 0), norrisMd: norrisMd}
+func newNorrisServer(port int, hostname string, norrisMd *NorrisMd) *NorrisServer {
+	return &NorrisServer{Port: port, Host: hostname, connections: make([]*Connection, 0), norrisMd: norrisMd}
 }
-
-var port = flag.String("port", ":3456", "HTTP port to listen on")
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -220,7 +217,7 @@ func (ns *NorrisServer) run() error {
 	http.HandleFunc("/norris_md/ws", ns.serveWs)
 	http.HandleFunc("/", ns.serveStatic)
 
-	err := http.ListenAndServe(*port, nil)
+	err := http.ListenAndServe(fmt.Sprintf("%v:%v", ns.Host, ns.Port), nil)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 		return err
