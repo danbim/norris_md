@@ -1,9 +1,9 @@
 # NorrisMd
 
-NorrisMd is a WYSIWYGWS (what you see is what you get when saving) Web site editor and generator.
-While creating and editing your site using Markdown syntax NorrisMd runs an HTTP server pushing
-your edits to the browser whenever you press 'save', giving you an almost live view of the website
-while creating it.
+NorrisMd is a simple, yet extremely powerful WYSIWYGWS (what you see is what you get when saving)
+Web site editor and generator. While creating and editing your site using Markdown syntax NorrisMd
+runs an HTTP server pushing your edits to the browser whenever you press 'save', giving you an
+almost live view of the website while creating it.
 
 In addition NorrisMd let's you generate static Web sites from your markdown content tree ready to
 be served as static content by any Web server of your choice!
