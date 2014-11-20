@@ -147,6 +147,12 @@ func (ns *NorrisServer) serveStatic(w http.ResponseWriter, r *http.Request) {
 func (ns *NorrisServer) serveContent(w http.ResponseWriter, r *http.Request) {
 
 	contentPath := r.URL.Path[len(PATH_CONTENT):len(r.URL.Path)]
+
+	if !ns.norrisMd.contentExists(contentPath) {
+		http.Error(w, fmt.Sprintf("Requested file %v does not exist!", contentPath), 404)
+		return
+	}
+
 	log.Printf("Serving markdown content: %v", contentPath)
 
 	content, err := ns.norrisMd.render(contentPath)

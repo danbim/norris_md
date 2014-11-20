@@ -73,7 +73,6 @@ class="caret"></span></a>
 
 <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
 <script src="js/jquery-2.1.1.min.js"></script>
-<script src="js/jquery.loadTemplate-1.4.4.min.js"></script>
 <!-- Include all compiled plugins (below), or include individual files as needed -->
 <script src="js/bootstrap.min.js"></script>
 <script src="js/mustache-0.8.1.js"></script>
@@ -111,7 +110,7 @@ function buildNavigation() {
 	});
 }
 
-function onMenuItemCreated(evt) {
+function onCreated(evt) {
 	var splitPath = evt.Path.split("/");
 	if (splitPath.length > 2) {
 		window.alert('Received an update for a newly created content document. Unfortunately the path ' + evt.Path + ' contains more than one level of folder hierarchy which is currently not supported by NorrisMd');
@@ -124,18 +123,29 @@ function onMenuItemCreated(evt) {
 	}
 }
 
-function onMenuItemUpdated(evt) {
+function onUpdated(evt) {
 
+	// re-render page if we're currently displaying the udpated site
+	if (window.location.hash.substr(1) == evt.Path) {
+
+	}
+	console.log(event.data);
 }
 
-function onMenuItemDeleted(evt) {
+function onDeleted(evt) {
 	var splitPath = evt.Path.split("/");
 	if (splitPath.length > 2) {
 		window.alert('Received an update for a newly created content document. Unfortunately the path ' + evt.Path + ' contains more than one level of folder hierarchy which is currently not supported by NorrisMd');
 		return;
 	}
-	var li = $('#norris_md-nav a[href="#' + evt.Path + '"]').parent('li');
-	li.remove();
+
+	// remove menu item (if directory is removed it will also remove all children from navigation)
+	$('#norris_md-nav a[href="#' + evt.Path + '"]').parent('li').remove();
+	
+	// if we're currently displaying one of the removed pages we shall navigate home
+	if (evt.Path.indexOf(window.location.hash.substr(1)) > -1) {
+		navigate('');
+	}
 }
 
 function listenForUpdates() {
@@ -144,27 +154,21 @@ function listenForUpdates() {
 		var evt = JSON.parse(event.data);
 		switch (evt.Type) {
 			case 'CREATED':
-				onMenuItemCreated(evt);
+				onCreated(evt);
 				break;
 			case 'UPDATED':
-				onMenuItemUpdated(evt);
+				onUpdated(evt);
 				break;
 			case 'DELETED':
-				onMenuItemDeleted(evt);
+				onDeleted(evt);
 				break;
 		}
-		console.log(event.data);
 	}
-	// TODO connect to NorrisMd websocket server to listen for updates
 }
 
 function navigate(path) {
 
 	$("#norris_md-nav").find('li').toggleClass('active', false);
-
-	if ("" == path) {
-		path = "Home.md";
-	}
 
 	$("#norris_md-nav")
 		.find("li a[href='#" + path + "']")
@@ -176,6 +180,10 @@ function navigate(path) {
 		.closest('li')
 		.toggleClass('active', true);
 
+	loadPage(path);
+}
+
+function loadPage(path) {
 	$("#norris_md-content").empty();
 	$("#norris_md-content").append($('<img src="img/ajax-loader.gif"/>'));
 	$.ajax("/norris_md/content/" + path, {
@@ -184,14 +192,18 @@ function navigate(path) {
 			$("#norris_md-content").html(html);
 		},
 		error: function(jqXHR, textStatus, errorThrown) {
-			console.log(jqXHR, textStatus, errorThrown);
+			html = $('<div/>')
+				.append('<h2>jqXHR</h2>')
+				.append('<pre>' + JSON.stringify(jqXHR, '', '  ') + '</pre>')
+				.append('<h2>textStatus</h2>')
+				.append('<pre>' + textStatus + '</pre>')
+				.append('<h2>errorThrown</h2>')
+				.append('<pre>' + errorThrown + '</pre>');
+			$("#norris_md-content").empty();
+			$("#norris_md-content").html(html);
 		}
 	});
 }
-
-var templates = [
-  "unknown"
-];
 
 $(function() {
 	buildNavigation();
@@ -200,7 +212,12 @@ $(function() {
 });
 
 window.onhashchange = function() {
-	navigate(window.location.hash.substr(1));
+	var target = window.location.hash.substr(1);
+	if (target == '') {
+		window.location.hash = '#Home.md';
+		target = 'Home.md';
+	}
+	navigate(target);
 };
 
 </script>

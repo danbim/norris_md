@@ -120,6 +120,10 @@ func (n NorrisMd) printTree(root *NodeInfo, indent int) {
 	}
 }
 
+func (n *NorrisMd) contentExists(path string) bool {
+	return fileExists(filepath.Join(n.RootPath, path))
+}
+
 func fileExists(path string) bool {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return false
