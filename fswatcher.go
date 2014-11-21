@@ -73,31 +73,36 @@ func (fsw FSWatcher) watchRecursive(dir string) error {
 
 			pathAbs, _ := filepath.Abs(fileEvent.Name)
 			path, _ := filepath.Rel(fsw.dir, pathAbs)
+			pathBase := filepath.Base(pathAbs)
 
-			if fileEvent.IsCreate() {
+			// file is hidden, ignore it
+			if !strings.HasPrefix(pathBase, ".") {
 
-				fsw.events <- FSEvent{EventType: CREATED, Path: path}
+				if fileEvent.IsCreate() {
 
-				if fsw.isDir(path) {
-					fsw.watchRecursive(filepath.Join(fsw.dir, path))
+					fsw.events <- FSEvent{EventType: CREATED, Path: path}
+
+					if fsw.isDir(path) {
+						fsw.watchRecursive(filepath.Join(fsw.dir, path))
+					}
+
+				} else if fileEvent.IsDelete() {
+
+					fsw.events <- FSEvent{EventType: DELETED, Path: path}
+					fsw.watcher.RemoveWatch(path)
+
+				} else if fileEvent.IsModify() {
+
+					fsw.events <- FSEvent{EventType: UPDATED, Path: path}
+
+				} else if fileEvent.IsRename() {
+
+					// only occurs on rename and then CREATED has been issued before
+					// so we'll have to create a DELETED event to not get incosistent
+					fsw.events <- FSEvent{EventType: DELETED, Path: path}
+					fsw.watcher.RemoveWatch(path)
+
 				}
-
-			} else if fileEvent.IsDelete() {
-
-				fsw.events <- FSEvent{EventType: DELETED, Path: path}
-				fsw.watcher.RemoveWatch(path)
-
-			} else if fileEvent.IsModify() {
-
-				fsw.events <- FSEvent{EventType: UPDATED, Path: path}
-
-			} else if fileEvent.IsRename() {
-
-				// only occurs on rename and then CREATED has been issued before
-				// so we'll have to create a DELETED event to not get incosistent
-				fsw.events <- FSEvent{EventType: DELETED, Path: path}
-				fsw.watcher.RemoveWatch(path)
-
 			}
 		}
 	}()

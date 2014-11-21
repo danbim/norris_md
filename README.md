@@ -30,7 +30,7 @@ go build
        * [ ] site welcome page (Home.md shouldn't be visible but displayed when clicking on home)
        * [ ] keywords for search engines, author data, ...
  * [ ] Only render .md files, serve other static contents as well
- * [ ] Ignore hidden files (e.g., vim swap files)
+ * [X] Ignore hidden files (e.g., vim swap files)
  * [ ] Allow sorting (sub)pages in the menu bar
  * [ ] Document how to configure NorrisMd and the site (using meta data files)
  * [ ] Include static content into the binary built by the Go compiler (using e.g. go-bindata)
