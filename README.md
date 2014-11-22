@@ -26,7 +26,7 @@ go build
  * [X] Allow configuration of port and hostname
  * [X] Allow configuration of document root directory
  * [ ] Allow attaching meta data to documents
-       * [ ] title attribute to control the displayed title in menu and Browser window
+       * [X] title attribute to control the displayed title in menu
        * [ ] site welcome page (Home.md shouldn't be visible but displayed when clicking on home)
        * [ ] keywords for search engines, author data, ...
  * [ ] Only render .md files, serve other static contents as well

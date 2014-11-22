@@ -1,7 +1,7 @@
 package main
 
 import (
-	//"encoding/json"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
 
@@ -41,17 +42,44 @@ type NodeInfo struct {
 	Children []*NodeInfo
 }
 
-func (n NorrisMd) convert(path string, fileInfo os.FileInfo) NodeInfo {
-	var nodeType string
+type NodeMetaData struct {
+	Title string
+}
+
+func (n *NorrisMd) metaData(path string, fileInfo os.FileInfo) *NodeMetaData {
+	metaPath := path[0:strings.LastIndex(path, ".")] + ".json"
+	log.Println("==============> checking %v", metaPath)
+	fileContents, err := ioutil.ReadFile(metaPath)
+	if err != nil {
+		return nil
+	}
+	nodeMetaData := &NodeMetaData{}
+	if err := json.Unmarshal(fileContents, nodeMetaData); err != nil {
+		log.Printf("Error unmarshalling meta data in %v: %v", metaPath, err)
+		return nil
+	}
+	log.Println("============> found %v", metaPath)
+	return nodeMetaData
+}
+
+func (n *NorrisMd) convert(pathAbs string, pathRel string, fileInfo os.FileInfo) *NodeInfo {
+	var nodeType, title string
 	if fileInfo.IsDir() {
 		nodeType = "dir"
+		title = fileInfo.Name()
 	} else {
 		nodeType = "file"
+		metaData := n.metaData(pathAbs, fileInfo)
+		if metaData != nil {
+			title = metaData.Title
+		} else {
+			title = fileInfo.Name()[0:strings.LastIndex(fileInfo.Name(), ".")]
+		}
 	}
-	return NodeInfo{
+	return &NodeInfo{
 		NodeType: nodeType,
-		Title:    fileInfo.Name(),
-		Path:     path,
+		Title:    title,
+		Path:     pathRel,
 		Children: make([]*NodeInfo, 0, 0),
 	}
 }
@@ -67,10 +95,16 @@ func (n *NorrisMd) readTree() (NodeInfo, error) {
 		rootPathAbs, err := filepath.Abs(n.RootPath)
 		filePathAbs, err := filepath.Abs(filePath)
 		filePathRel, err := filepath.Rel(rootPathAbs, filePathAbs)
+		dir, file := filepath.Split(filePathAbs)
+		mode := fileInfo.Mode()
 
-		nodeInfo := n.convert(filePathRel, fileInfo)
+		log.Printf("Checking path=%v, file=%v", dir, file)
 
-		all[filePathRel] = &nodeInfo
+		// only add dirs and .md files to the document tree, all other files are assets
+		if rootPathAbs == filePathAbs || mode.IsDir() || strings.HasSuffix(file, ".md") {
+			log.Printf("Adding path=%v, file=%v", dir, file)
+			all[filePathRel] = n.convert(filePathAbs, filePathRel, fileInfo)
+		}
 
 		return err
 	})
@@ -207,21 +241,27 @@ func (n NorrisMd) run() {
 				Path: evt.Path,
 			})
 		case evt.EventType == UPDATED || evt.EventType == CREATED:
+
 			var Type string
 			if evt.EventType == UPDATED {
 				Type = "UPDATED"
 			} else {
 				Type = "CREATED"
 			}
+
 			log.Printf("%v %v", Type, evt.Path)
-			fileInfo, err := os.Stat(filepath.Join(n.RootPath, evt.Path))
+
+			filePathRel := evt.Path
+			filePathAbs := filepath.Join(n.RootPath, evt.Path)
+			fileInfo, err := os.Stat(filePathAbs)
+
 			if err != nil {
 				log.Printf("error while reading file info for file %v", err)
 			} else {
 				ns.sendUpdate(&NorrisUpdate{
 					Type:     Type,
 					Path:     evt.Path,
-					NodeInfo: n.convert(evt.Path, fileInfo),
+					NodeInfo: *n.convert(filePathAbs, filePathRel, fileInfo),
 				})
 			}
 		}
