@@ -29,7 +29,7 @@ go build
        * [X] title attribute to control the displayed title in menu
        * [ ] site welcome page (Home.md shouldn't be visible but displayed when clicking on home)
        * [ ] keywords for search engines, author data, ...
- * [ ] Only render .md files, serve other static contents as well
+ * [X] Only render .md files, serve other static contents as well
  * [X] Ignore hidden files (e.g., vim swap files)
  * [ ] Allow sorting (sub)pages in the menu bar
  * [ ] Document how to configure NorrisMd and the site (using meta data files)

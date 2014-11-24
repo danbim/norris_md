@@ -48,7 +48,6 @@ type NodeMetaData struct {
 
 func (n *NorrisMd) metaData(path string, fileInfo os.FileInfo) *NodeMetaData {
 	metaPath := path[0:strings.LastIndex(path, ".")] + ".json"
-	log.Println("==============> checking %v", metaPath)
 	fileContents, err := ioutil.ReadFile(metaPath)
 	if err != nil {
 		return nil
@@ -58,7 +57,6 @@ func (n *NorrisMd) metaData(path string, fileInfo os.FileInfo) *NodeMetaData {
 		log.Printf("Error unmarshalling meta data in %v: %v", metaPath, err)
 		return nil
 	}
-	log.Println("============> found %v", metaPath)
 	return nodeMetaData
 }
 

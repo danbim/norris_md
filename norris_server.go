@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -79,7 +80,7 @@ func (ns *NorrisServer) removeConn(c *Connection) {
 	}
 }
 
-func (ns *NorrisServer) serveMeta(w http.ResponseWriter, r *http.Request) {
+func (ns *NorrisServer) serveTree(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", 405)
@@ -117,24 +118,33 @@ func (ns *NorrisServer) serveStatic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.URL.Path == "/" {
-		r.URL.Path = "index.html"
+		r.URL.Path = "/index.html"
+	} else if strings.HasPrefix(r.URL.Path, "/norris_md/static") {
+		r.URL.Path = r.URL.Path[len("/norris_md/static/"):]
 	}
 
 	requestedAbsPath, _ := filepath.Abs(filepath.Join(ns.norrisMd.StaticPath, r.URL.Path))
-	if !fileExists(requestedAbsPath) {
-		http.Error(w, fmt.Sprintf("Requested file %v does not exist!", requestedAbsPath), 404)
+	ns.serveFile(requestedAbsPath, w, r)
+}
+
+func (ns *NorrisServer) serveFile(absPath string, w http.ResponseWriter, r *http.Request) {
+
+	log.Printf("serveFile %v", absPath)
+
+	if !fileExists(absPath) {
+		http.Error(w, fmt.Sprintf("Requested file %v does not exist!", absPath), 404)
 		return
 	}
 
-	file, err := ioutil.ReadFile(requestedAbsPath)
+	file, err := ioutil.ReadFile(absPath)
 	if err != nil {
-		msg := fmt.Sprintf("Error reading template file (%v): %v", requestedAbsPath, err)
+		msg := fmt.Sprintf("Error reading template file (%v): %v", absPath, err)
 		log.Println(msg)
 		http.Error(w, msg, 500)
 		return
 	}
 
-	contentType := mime.TypeByExtension(filepath.Ext(requestedAbsPath))
+	contentType := mime.TypeByExtension(filepath.Ext(absPath))
 	if "" != contentType {
 		w.Header().Set("Content-Type", contentType+"; charset=utf-8")
 	}
@@ -143,25 +153,43 @@ func (ns *NorrisServer) serveStatic(w http.ResponseWriter, r *http.Request) {
 
 func (ns *NorrisServer) serveContent(w http.ResponseWriter, r *http.Request) {
 
+	if "/" == r.URL.Path || "/index.html" == r.URL.Path {
+		ns.serveStatic(w, r)
+		return
+	}
+
+	log.Printf("serveContent %v", r.URL.Path)
+
 	contentPath := r.URL.Path[len(PATH_CONTENT):len(r.URL.Path)]
+	log.Printf("serveContent.contentPath %v", contentPath)
 
 	if !ns.norrisMd.contentExists(contentPath) {
-		http.Error(w, fmt.Sprintf("Requested file %v does not exist!", contentPath), 404)
-		return
-	}
 
-	log.Printf("Serving markdown content: %v", contentPath)
-
-	content, err := ns.norrisMd.render(contentPath)
-	if err != nil {
-		msg := fmt.Sprintf("Error rendering markdown content for %v: %v", contentPath, err)
+		msg := fmt.Sprintf("Requested file %v does not exist!", contentPath)
 		log.Println(msg)
-		http.Error(w, msg, 500)
+		http.Error(w, msg, 404)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write(content)
+	if strings.HasSuffix(contentPath, ".md") {
+
+		log.Printf("Serving markdown content: %v", contentPath)
+
+		content, err := ns.norrisMd.render(contentPath)
+		if err != nil {
+			msg := fmt.Sprintf("Error rendering markdown content for %v: %v", contentPath, err)
+			log.Println(msg)
+			http.Error(w, msg, 500)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(content)
+
+	} else {
+
+		absPath, _ := filepath.Abs(filepath.Join(ns.norrisMd.RootPath, r.URL.Path))
+		ns.serveFile(absPath, w, r)
+	}
 }
 
 func (ns *NorrisServer) serveWs(w http.ResponseWriter, r *http.Request) {
@@ -205,17 +233,18 @@ func (ns *NorrisServer) sendUpdate(nu *NorrisUpdate) {
 }
 
 const (
-	PATH_CONTENT = "/norris_md/content/"
+	PATH_CONTENT = "/"
 	PATH_TREE    = "/norris_md/tree.json"
 	PATH_WS      = "/norris_md/ws"
+	PATH_STATIC  = "/norris_md/static/"
 )
 
 func (ns *NorrisServer) run() error {
 
-	http.HandleFunc("/norris_md/content/", ns.serveContent)
-	http.HandleFunc("/norris_md/tree.json", ns.serveMeta)
-	http.HandleFunc("/norris_md/ws", ns.serveWs)
-	http.HandleFunc("/", ns.serveStatic)
+	http.HandleFunc(PATH_CONTENT, ns.serveContent)
+	http.HandleFunc(PATH_TREE, ns.serveTree)
+	http.HandleFunc(PATH_WS, ns.serveWs)
+	http.HandleFunc(PATH_STATIC, ns.serveStatic)
 
 	err := http.ListenAndServe(fmt.Sprintf("%v:%v", ns.Host, ns.Port), nil)
 	if err != nil {
