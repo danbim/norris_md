@@ -19,6 +19,10 @@ go build
 ./norris_md
 ```
 
+## Why the name?
+
+Go ask Chuck if you dare to!
+
 ## Roadmap
 
 ### Live editing features
